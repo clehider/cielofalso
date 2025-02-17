@@ -73,35 +73,35 @@
     </div>
 
     <!-- Modal de Cliente -->
-    <div v-if="mostrarModalCliente" class="modal">
-      <div class="modal-content">
-        <h3>Datos del Cliente</h3>
-        <form @submit.prevent="confirmarVenta" class="form-cliente">
-          <div class="form-group">
-            <label>Nombre Completo:</label>
-            <input v-model="clienteData.nombre" required>
-          </div>
-          <div class="form-group">
-            <label>Teléfono:</label>
-            <input v-model="clienteData.telefono" required>
-          </div>
-          <div class="form-group">
-            <label>Dirección:</label>
-            <input v-model="clienteData.direccion" required>
-          </div>
-          <div class="form-group">
-            <label>Referencia:</label>
-            <input v-model="clienteData.referencia">
-          </div>
-          <div class="modal-actions">
-            <button type="submit" class="btn-confirmar">Confirmar Venta</button>
-            <button type="button" @click="cancelarVenta" class="btn-cancelar">
-              Cancelar
-            </button>
-          </div>
-        </form>
+    <Teleport to="body">
+      <div v-if="mostrarModalCliente" class="modal" @click="cerrarModal">
+        <div class="modal-content" @click.stop>
+          <button @click="cerrarModal" class="btn-cerrar">&times;</button>
+          <h3>Datos del Cliente</h3>
+          <form @submit.prevent="confirmarVenta" class="form-cliente">
+            <div class="form-group">
+              <label>Nombre Completo:</label>
+              <input v-model="clienteData.nombre" required>
+            </div>
+            <div class="form-group">
+              <label>Teléfono:</label>
+              <input v-model="clienteData.telefono" required>
+            </div>
+            <div class="form-group">
+              <label>Dirección:</label>
+              <input v-model="clienteData.direccion" required>
+            </div>
+            <div class="form-group">
+              <label>Referencia:</label>
+              <input v-model="clienteData.referencia">
+            </div>
+            <div class="modal-actions">
+              <button type="submit" class="btn-confirmar">Confirmar Venta</button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -170,27 +170,24 @@ export default {
         console.log('Venta realizada:', ventaRealizada)
         alert('Venta realizada con éxito')
         console.log('Generando PDF...')
-        generarPDF(ventaRealizada)
+        await generarPDF(ventaRealizada)
         console.log('PDF generado')
-        limpiarDespuesDeVenta()
+        // Recargar la página después de un breve retraso
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000) // Espera 1 segundo antes de recargar
       } catch (error) {
         console.error('Error al realizar la venta:', error)
         alert('Error al realizar la venta: ' + error.message)
       }
     }
 
-    const cancelarVenta = () => {
+    const cerrarModal = () => {
       mostrarModalCliente.value = false
-      clienteData.value = {
-        nombre: '',
-        telefono: '',
-        direccion: '',
-        referencia: ''
-      }
+      limpiarDespuesDeVenta()
     }
 
     const limpiarDespuesDeVenta = () => {
-      mostrarModalCliente.value = false
       clienteData.value = {
         nombre: '',
         telefono: '',
@@ -201,7 +198,7 @@ export default {
       cantidades.value = {}
     }
 
-    const generarPDF = (venta) => {
+    const generarPDF = async (venta) => {
       console.log('Iniciando generación de PDF...', venta)
       const doc = new jsPDF()
       
@@ -292,7 +289,7 @@ export default {
       removerDelCarrito,
       iniciarVenta,
       confirmarVenta,
-      cancelarVenta,
+      cerrarModal,
       anularVenta,
       reimprimirVenta
     }
@@ -408,6 +405,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
 }
 
 .modal-content {
@@ -415,6 +413,18 @@ export default {
   padding: 20px;
   border-radius: 8px;
   width: 400px;
+  position: relative;
+}
+
+.btn-cerrar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #333;
 }
 
 .form-group {
@@ -435,17 +445,12 @@ export default {
 
 .modal-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 20px;
 }
 
 .btn-confirmar {
   background-color: #4CAF50;
-  color: white;
-}
-
-.btn-cancelar {
-  background-color: #ff4444;
   color: white;
 }
 
