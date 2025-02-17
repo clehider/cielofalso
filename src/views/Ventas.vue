@@ -76,6 +76,9 @@
                   :disabled="carrito.length === 0">
             Limpiar Carrito
           </button>
+          <button @click="mostrarHistorialVentas" class="btn-historial">
+            Historial de Ventas
+          </button>
         </div>
       </div>
     </div>
@@ -137,12 +140,61 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal de Historial de Ventas -->
+    <div class="modal" v-if="mostrarModalHistorial">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>Historial de Ventas</h3>
+          <button class="btn-close" @click="cerrarModalHistorial">×</button>
+        </div>
+        <div class="modal-body">
+          <table class="ventas-table">
+            <thead>
+              <tr>
+                <th>ID Venta</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="venta in ventas" :key="venta.id" :class="{ 'venta-anulada': venta.anulada }">
+                <td>{{ venta.id }}</td>
+                <td>{{ formatDate(venta.fecha) }}</td>
+                <td>{{ venta.nombreCliente || 'N/A' }}</td>
+                <td>{{ venta.total.toFixed(2) }} Bs</td>
+                <td>{{ venta.anulada ? 'Anulada' : 'Activa' }}</td>
+                <td>
+                  <button @click="reimprimirPDF(venta)" class="btn-action">
+                    <i class="fas fa-print"></i> Reimprimir
+                  </button>
+                  <button 
+                    @click="anularVenta(venta)" 
+                    class="btn-action btn-anular"
+                    :disabled="venta.anulada">
+                    <i class="fas fa-ban"></i> {{ venta.anulada ? 'Anulada' : 'Anular' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="reporte-actions">
+            <button @click="generarReporteVentas" class="btn-primary">
+              <i class="fas fa-file-pdf"></i> Generar Reporte de Ventas
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, increment } from 'firebase/firestore'
 import { db } from '../firebase'
 
 // Importamos pdfMake de manera dinámica para evitar problemas de SSR
@@ -163,10 +215,12 @@ export default {
     const busqueda = ref('')
     const carrito = ref([])
     const mostrarModalPago = ref(false)
+    const mostrarModalHistorial = ref(false)
     const metodoPago = ref('efectivo')
     const montoRecibido = ref(0)
     const nombreCliente = ref('')
     const ciNitCliente = ref('')
+    const ventas = ref([])
 
     const cargarProductos = async () => {
       try {
@@ -372,7 +426,8 @@ export default {
           metodoPago: metodoPago.value,
           total: total.value,
           nombreCliente: nombreCliente.value,
-          ciNitCliente: ciNitCliente.value
+          ciNitCliente: ciNitCliente.value,
+          anulada: false
         }
 
         const docRef = await addDoc(collection(db, 'ventas'), venta)
@@ -408,6 +463,170 @@ export default {
       }
     }
 
+    const mostrarHistorialVentas = async () => {
+      try {
+        const ventasQuery = query(collection(db, 'ventas'), orderBy('fecha', 'desc'))
+        const querySnapshot = await getDocs(ventasQuery)
+        ventas.value = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          fecha: doc.data().fecha?.toDate() // Convertir Timestamp a Date
+        }))
+        mostrarModalHistorial.value = true
+      } catch (error) {
+        console.error('Error al cargar el historial de ventas:', error)
+        alert('Error al cargar el historial de ventas')
+      }
+    }
+
+    const cerrarModalHistorial = () => {
+      mostrarModalHistorial.value = false
+    }
+
+    const formatDate = (date) => {
+      if (!(date instanceof Date)) return ''
+      return date.toLocaleString()
+    }
+
+    const reimprimirPDF = (venta) => {
+      generarPDF(venta.id, venta)
+    }
+
+    const anularVenta = async (venta) => {
+      if (!venta || venta.anulada) return;
+      
+      if (confirm(`¿Está seguro de que desea anular la venta #${venta.id}?`)) {
+        try {
+          // 1. Marcar la venta como anulada
+          const ventaRef = doc(db, 'ventas', venta.id);
+          await updateDoc(ventaRef, { 
+            anulada: true,
+            fechaAnulacion: serverTimestamp()
+          });
+
+          // 2. Devolver el stock a los productos
+          for (const item of venta.items) {
+            const productoRef = doc(db, 'productos', item.productoId);
+            await updateDoc(productoRef, {
+              cantidad: increment(item.cantidad)
+            });
+          }
+
+          // 3. Registrar en caja chica
+          await addDoc(collection(db, 'cajaChica'), {
+            fecha: serverTimestamp(),
+            tipo: 'egreso',
+            descripcion: `Anulación de Venta #${venta.id}`,
+            monto: venta.total,
+            metodoPago: venta.metodoPago
+          });
+
+          // 4. Actualizar la lista de ventas
+          const ventaIndex = ventas.value.findIndex(v => v.id === venta.id);
+          if (ventaIndex !== -1) {
+            ventas.value[ventaIndex] = { ...ventas.value[ventaIndex], anulada: true };
+          }
+
+          alert('Venta anulada con éxito');
+          await cargarProductos(); // Recargar productos para actualizar stock
+        } catch (error) {
+          console.error('Error al anular la venta:', error);
+          alert('Error al anular la venta: ' + error.message);
+        }
+      }
+    };
+
+    const generarReporteVentas = async () => {
+      try {
+        if (!pdfMake) {
+          throw new Error('pdfMake no está disponible');
+        }
+
+        const ventasValidas = ventas.value.filter(v => !v.anulada);
+        const totalVentas = ventasValidas.reduce((sum, v) => sum + v.total, 0);
+
+        // Preparar los datos de las ventas
+        const ventasData = ventasValidas.map(v => ([
+          v.id,
+          v.nombreCliente || 'N/A',
+          formatDate(v.fecha),
+          v.metodoPago,
+          `${v.total.toFixed(2)} Bs`
+        ]));
+
+        const docDefinition = {
+          content: [
+            {
+              text: 'Reporte de Ventas',
+              style: 'header',
+              margin: [0, 0, 0, 20]
+            },
+            {
+              text: `Fecha de generación: ${new Date().toLocaleString()}`,
+              style: 'subheader',
+              margin: [0, 0, 0, 20]
+            },
+            {
+              table: {
+                headerRows: 1,
+                widths: ['auto', '*', 'auto', 'auto', 'auto'],
+                body: [
+                  [
+                    { text: 'ID Venta', style: 'tableHeader' },
+                    { text: 'Cliente', style: 'tableHeader' },
+                    { text: 'Fecha', style: 'tableHeader' },
+                    { text: 'Método de Pago', style: 'tableHeader' },
+                    { text: 'Total', style: 'tableHeader' }
+                  ],
+                  ...ventasData
+                ]
+              }
+            },
+            {
+              text: `\nTotal de Ventas: ${totalVentas.toFixed(2)} Bs`,
+              style: 'total',
+              margin: [0, 20, 0, 0]
+            }
+          ],
+          styles: {
+            header: {
+              fontSize: 22,
+              bold: true,
+              color: '#006400',
+              alignment: 'center'
+            },
+            subheader: {
+              fontSize: 16,
+              bold: true,
+              color: '#2E74B5'
+            },
+            tableHeader: {
+              bold: true,
+              fontSize: 13,
+              color: 'white',
+              fillColor: '#4472C4',
+              alignment: 'center'
+            },
+            total: {
+              fontSize: 18,
+              bold: true,
+              color: '#2E74B5',
+              alignment: 'right'
+            }
+          },
+          defaultStyle: {
+            fontSize: 12
+          }
+        };
+
+        // Generar y descargar el PDF
+        pdfMake.createPdf(docDefinition).download(`reporte_ventas_${new Date().toISOString().split('T')[0]}.pdf`);
+      } catch (error) {
+        console.error('Error al generar el reporte:', error);
+        alert('Error al generar el reporte: ' + error.message);
+      }
+    };
+
     onMounted(cargarProductos)
 
     return {
@@ -415,10 +634,12 @@ export default {
       busqueda,
       carrito,
       mostrarModalPago,
+      mostrarModalHistorial,
       metodoPago,
       montoRecibido,
       nombreCliente,
       ciNitCliente,
+      ventas,
       productosFiltrados,
       subtotal,
       total,
@@ -431,7 +652,13 @@ export default {
       limpiarCarrito,
       procesarVenta,
       cerrarModalPago,
-      confirmarVenta
+      confirmarVenta,
+      mostrarHistorialVentas,
+      cerrarModalHistorial,
+      formatDate,
+      reimprimirPDF,
+      anularVenta,
+      generarReporteVentas
     }
   }
 }
@@ -593,24 +820,26 @@ export default {
   gap: 10px;
 }
 
-.btn-procesar {
-  background: #4CAF50;
-  color: white;
-  border: none;
+.btn-procesar, .btn-limpiar, .btn-historial {
+  width: 100%;
   padding: 12px;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 1rem;
+  color: white;
+}
+
+.btn-procesar {
+  background: #4CAF50;
 }
 
 .btn-limpiar {
   background: #6c757d;
-  color: white;
-  border: none;
-  padding: 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
+}
+
+.btn-historial {
+  background: #17a2b8;
 }
 
 .modal {
@@ -633,6 +862,10 @@ export default {
   max-width: 500px;
 }
 
+.modal-large {
+  max-width: 800px;
+}
+
 .modal-header {
   padding: 15px 20px;
   border-bottom: 1px solid #ddd;
@@ -643,6 +876,8 @@ export default {
 
 .modal-body {
   padding: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .form-group {
@@ -682,9 +917,58 @@ export default {
   justify-content: flex-end;
 }
 
+.ventas-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ventas-table th,
+.ventas-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.ventas-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.btn-action {
+  padding: 5px 10px;
+  margin: 2px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: white;
+}
+
+.btn-action:not(:last-child) {
+  margin-right: 5px;
+}
+
+.btn-anular {
+  background-color: #dc3545;
+}
+
+.btn-anular:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.reporte-actions {
+  margin-top: 20px;
+  text-align: right;
+}
+
 button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.venta-anulada {
+  background-color: #ffdddd;
 }
 
 @media (max-width: 1024px) {
