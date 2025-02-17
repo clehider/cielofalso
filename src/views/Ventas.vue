@@ -89,6 +89,14 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label>Nombre del Cliente:</label>
+            <input type="text" v-model="nombreCliente">
+          </div>
+          <div class="form-group">
+            <label>CI/NIT del Cliente:</label>
+            <input type="text" v-model="ciNitCliente">
+          </div>
+          <div class="form-group">
             <label>Método de Pago:</label>
             <select v-model="metodoPago">
               <option value="efectivo">Efectivo</option>
@@ -157,6 +165,8 @@ export default {
     const mostrarModalPago = ref(false)
     const metodoPago = ref('efectivo')
     const montoRecibido = ref(0)
+    const nombreCliente = ref('')
+    const ciNitCliente = ref('')
 
     const cargarProductos = async () => {
       try {
@@ -193,9 +203,9 @@ export default {
 
     const puedeConfirmar = computed(() => {
       if (metodoPago.value === 'efectivo') {
-        return montoRecibido.value >= total.value
+        return montoRecibido.value >= total.value && nombreCliente.value && ciNitCliente.value
       }
-      return true
+      return nombreCliente.value && ciNitCliente.value
     })
 
     const agregarAlCarrito = (producto) => {
@@ -245,6 +255,8 @@ export default {
       mostrarModalPago.value = false
       metodoPago.value = 'efectivo'
       montoRecibido.value = 0
+      nombreCliente.value = ''
+      ciNitCliente.value = ''
     }
 
     const generarPDF = (ventaId, venta) => {
@@ -255,9 +267,11 @@ export default {
 
       const docDefinition = {
         content: [
-          { text: 'Factura de Venta', style: 'header' },
+          { text: 'Factura de Venta', style: 'mainHeader' },
           { text: `Nº de Venta: ${ventaId}`, style: 'subheader' },
           { text: `Fecha: ${new Date().toLocaleString()}`, style: 'subheader' },
+          { text: `Cliente: ${venta.nombreCliente}`, style: 'subheader' },
+          { text: `CI/NIT: ${venta.ciNitCliente}`, style: 'subheader' },
           { text: '\n' },
           {
             table: {
@@ -303,10 +317,10 @@ export default {
           { text: '¡Gracias por su compra!', style: 'thanks' }
         ],
         styles: {
-          header: {
+          mainHeader: {
             fontSize: 22,
             bold: true,
-            color: '#2E74B5',
+            color: '#006400',
             alignment: 'center',
             margin: [0, 0, 0, 10]
           },
@@ -356,7 +370,9 @@ export default {
             subtotal: item.cantidad * item.precioVenta
           })),
           metodoPago: metodoPago.value,
-          total: total.value
+          total: total.value,
+          nombreCliente: nombreCliente.value,
+          ciNitCliente: ciNitCliente.value
         }
 
         const docRef = await addDoc(collection(db, 'ventas'), venta)
@@ -401,6 +417,8 @@ export default {
       mostrarModalPago,
       metodoPago,
       montoRecibido,
+      nombreCliente,
+      ciNitCliente,
       productosFiltrados,
       subtotal,
       total,
