@@ -13,6 +13,7 @@
     "@vueuse/core": "^10.0.0",
     "firebase": "^9.0.0",
     "jspdf": "^2.5.1",
+    "pdfmake": "^0.2.18",
     "pinia": "^2.3.1",
     "vue": "^3.3.4",
     "vue-router": "^4.0.0"

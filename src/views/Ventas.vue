@@ -137,6 +137,17 @@ import { ref, computed, onMounted } from 'vue'
 import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 
+// Importamos pdfMake de manera dinámica para evitar problemas de SSR
+let pdfMake;
+if (typeof window !== 'undefined') {
+  import('pdfmake/build/pdfmake').then((pdfMakeModule) => {
+    pdfMake = pdfMakeModule.default;
+    import('pdfmake/build/vfs_fonts').then((vfsFontsModule) => {
+      pdfMake.vfs = vfsFontsModule.default.pdfMake.vfs;
+    });
+  });
+}
+
 export default {
   name: 'Ventas',
   setup() {
@@ -236,6 +247,78 @@ export default {
       montoRecibido.value = 0
     }
 
+    const generarPDF = (ventaId, venta) => {
+      if (!pdfMake) {
+        console.error('pdfMake no está disponible');
+        return;
+      }
+
+      const docDefinition = {
+        content: [
+          { text: 'Factura de Venta', style: 'header' },
+          { text: `Nº de Venta: ${ventaId}`, style: 'subheader' },
+          { text: `Fecha: ${new Date().toLocaleString()}`, style: 'subheader' },
+          { text: '\n' },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['*', 'auto', 'auto', 'auto'],
+              body: [
+                [{ text: 'Producto', style: 'tableHeader' }, 
+                 { text: 'Cantidad', style: 'tableHeader' }, 
+                 { text: 'Precio Unitario', style: 'tableHeader' }, 
+                 { text: 'Subtotal', style: 'tableHeader' }],
+                ...venta.items.map(item => [
+                  item.nombre,
+                  item.cantidad,
+                  `${item.precioUnitario} Bs`,
+                  `${item.subtotal} Bs`
+                ])
+              ]
+            }
+          },
+          { text: '\n' },
+          { text: `Total: ${venta.total} Bs`, style: 'total' },
+          { text: `Método de Pago: ${venta.metodoPago}`, style: 'subheader' },
+          { text: '\n\n' },
+          { text: 'Gracias por su compra!', style: 'thanks' }
+        ],
+        styles: {
+          header: {
+            fontSize: 18,
+            bold: true,
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          },
+          subheader: {
+            fontSize: 14,
+            bold: true,
+            margin: [0, 10, 0, 5]
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 13,
+            color: 'black'
+          },
+          total: {
+            fontSize: 16,
+            bold: true,
+            alignment: 'right'
+          },
+          thanks: {
+            fontSize: 14,
+            italic: true,
+            alignment: 'center'
+          }
+        },
+        defaultStyle: {
+          columnGap: 20
+        }
+      };
+
+      pdfMake.createPdf(docDefinition).download(`factura_${ventaId}.pdf`);
+    }
+
     const confirmarVenta = async () => {
       try {
         // Registrar la venta
@@ -243,6 +326,7 @@ export default {
           fecha: serverTimestamp(),
           items: carrito.value.map(item => ({
             productoId: item.id,
+            nombre: item.nombre,
             cantidad: item.cantidad,
             precioUnitario: item.precioVenta,
             subtotal: item.cantidad * item.precioVenta
@@ -251,7 +335,7 @@ export default {
           total: total.value
         }
 
-        await addDoc(collection(db, 'ventas'), venta)
+        const docRef = await addDoc(collection(db, 'ventas'), venta)
 
         // Actualizar stock
         for (const item of carrito.value) {
@@ -266,10 +350,13 @@ export default {
         await addDoc(collection(db, 'cajaChica'), {
           fecha: serverTimestamp(),
           tipo: 'ingreso',
-          descripcion: `Venta #${Date.now()}`,
+          descripcion: `Venta #${docRef.id}`,
           monto: total.value,
           metodoPago: metodoPago.value
         })
+
+        // Generar PDF
+        generarPDF(docRef.id, venta)
 
         // Recargar productos y limpiar carrito
         await cargarProductos()
