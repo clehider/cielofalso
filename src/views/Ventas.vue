@@ -264,55 +264,79 @@ export default {
               headerRows: 1,
               widths: ['*', 'auto', 'auto', 'auto'],
               body: [
-                [{ text: 'Producto', style: 'tableHeader' }, 
-                 { text: 'Cantidad', style: 'tableHeader' }, 
-                 { text: 'Precio Unitario', style: 'tableHeader' }, 
-                 { text: 'Subtotal', style: 'tableHeader' }],
+                [
+                  { text: 'Producto', style: 'tableHeader' }, 
+                  { text: 'Cantidad', style: 'tableHeader' }, 
+                  { text: 'Precio Unitario', style: 'tableHeader' }, 
+                  { text: 'Subtotal', style: 'tableHeader' }
+                ],
                 ...venta.items.map(item => [
                   item.nombre,
-                  item.cantidad,
-                  `${item.precioUnitario} Bs`,
-                  `${item.subtotal} Bs`
+                  { text: item.cantidad.toString(), alignment: 'center' },
+                  { text: `${item.precioUnitario.toFixed(2)} Bs`, alignment: 'right' },
+                  { text: `${item.subtotal.toFixed(2)} Bs`, alignment: 'right' }
                 ])
               ]
+            },
+            layout: {
+              hLineWidth: function(i, node) {
+                return (i === 0 || i === node.table.body.length) ? 2 : 1;
+              },
+              vLineWidth: function(i, node) {
+                return (i === 0 || i === node.table.widths.length) ? 2 : 1;
+              },
+              hLineColor: function(i, node) {
+                return (i === 0 || i === node.table.body.length) ? 'black' : 'gray';
+              },
+              vLineColor: function(i, node) {
+                return (i === 0 || i === node.table.widths.length) ? 'black' : 'gray';
+              },
+              fillColor: function(rowIndex, node, columnIndex) {
+                return (rowIndex === 0) ? '#4472C4' : null;
+              },
             }
           },
           { text: '\n' },
-          { text: `Total: ${venta.total} Bs`, style: 'total' },
+          { text: `Total: ${venta.total.toFixed(2)} Bs`, style: 'total' },
           { text: `Método de Pago: ${venta.metodoPago}`, style: 'subheader' },
           { text: '\n\n' },
-          { text: 'Gracias por su compra!', style: 'thanks' }
+          { text: '¡Gracias por su compra!', style: 'thanks' }
         ],
         styles: {
           header: {
-            fontSize: 18,
+            fontSize: 22,
             bold: true,
+            color: '#2E74B5',
             alignment: 'center',
             margin: [0, 0, 0, 10]
           },
           subheader: {
-            fontSize: 14,
+            fontSize: 16,
             bold: true,
+            color: '#2E74B5',
             margin: [0, 10, 0, 5]
           },
           tableHeader: {
             bold: true,
             fontSize: 13,
-            color: 'black'
+            color: 'white'
           },
           total: {
-            fontSize: 16,
+            fontSize: 18,
             bold: true,
+            color: '#2E74B5',
             alignment: 'right'
           },
           thanks: {
-            fontSize: 14,
+            fontSize: 16,
             italic: true,
+            color: '#2E74B5',
             alignment: 'center'
           }
         },
         defaultStyle: {
-          columnGap: 20
+          columnGap: 20,
+          fontSize: 12
         }
       };
 
