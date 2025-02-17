@@ -1,41 +1,48 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
-import Productos from '../views/Productos.vue'
+import Inventario from '../views/Inventario.vue'
 import Ventas from '../views/Ventas.vue'
 import CajaChica from '../views/CajaChica.vue'
-import Gastos from '../views/Gastos.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: Home
+    component: Home,
+    meta: { keepAlive: true }
   },
   {
-    path: '/productos',
-    name: 'Productos',
-    component: Productos
+    path: '/inventario',
+    name: 'Inventario',
+    component: Inventario,
+    meta: { keepAlive: true }
   },
   {
     path: '/ventas',
     name: 'Ventas',
-    component: Ventas
+    component: Ventas,
+    meta: { keepAlive: true }
   },
   {
     path: '/caja-chica',
     name: 'CajaChica',
-    component: CajaChica
-  },
-  {
-    path: '/gastos',
-    name: 'Gastos',
-    component: Gastos
+    component: CajaChica,
+    meta: { keepAlive: true }
   }
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(process.env.BASE_URL),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  // Asegurarse de que la ruta existe
+  if (!to.matched.length) {
+    next('/')
+    return
+  }
+  next()
 })
 
 export default router

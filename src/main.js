@@ -1,7 +1,13 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { pinia } from './stores'
-import './assets/main.css'
+import '@fortawesome/fontawesome-free/css/all.css'
 
-createApp(App).use(router).use(pinia).mount('#app')
+const app = createApp(App)
+const pinia = createPinia()
+
+app.use(pinia)
+app.use(router)
+
+app.mount('#app')

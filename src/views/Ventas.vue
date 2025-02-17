@@ -1,354 +1,406 @@
 <template>
-  <div class="ventas-container">
-    <div class="productos-section">
-      <h2>Productos Disponibles</h2>
-      <input 
-        v-model="busqueda" 
-        placeholder="Buscar producto..."
-        class="search-input"
-      >
-      <div class="productos-list">
-        <div v-for="producto in productosFiltrados" :key="producto.id" class="producto-item">
-          <div class="producto-info">
-            {{ producto.nombre }} - {{ producto.precioVenta }} Bs
-            <div class="cantidad-container">
-              <input 
-                type="number" 
-                v-model.number="cantidades[producto.id]" 
-                min="1" 
-                :max="producto.cantidad"
-                class="cantidad-input"
-              >
-              <button 
-                @click="agregarAlCarrito(producto)"
-                class="btn-agregar"
-                :disabled="!cantidades[producto.id] || cantidades[producto.id] <= 0"
-              >
-                Agregar al carrito
-              </button>
+  <div class="ventas">
+    <h2 class="page-title">Punto de Venta</h2>
+
+    <div class="ventas-container">
+      <!-- Panel de Productos -->
+      <div class="productos-panel">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input 
+            type="text" 
+            v-model="busqueda" 
+            placeholder="Buscar producto..."
+            @input="filtrarProductos"
+          >
+        </div>
+
+        <div class="productos-grid">
+          <div v-for="producto in productosFiltrados" 
+               :key="producto.id" 
+               class="producto-card"
+               @click="agregarAlCarrito(producto)">
+            <div class="producto-info">
+              <h3>{{ producto.nombre }}</h3>
+              <p class="precio">{{ producto.precioVenta }} Bs</p>
+              <p class="stock" :class="{ 'stock-bajo': producto.cantidad <= producto.stockMinimo }">
+                Stock: {{ producto.cantidad }}
+              </p>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="carrito-section">
-      <h2>Carrito de Compras</h2>
-      <div class="carrito-items">
-        <div v-for="item in carrito" :key="item.id" class="carrito-item">
-          <span>{{ item.nombre }} - {{ item.precioVenta }} Bs x {{ item.cantidad }}</span>
-          <button @click="removerDelCarrito(item.id)" class="btn-remover">X</button>
+      <!-- Panel del Carrito -->
+      <div class="carrito-panel">
+        <h3>Carrito de Compras</h3>
+        
+        <div class="carrito-items">
+          <div v-for="item in carrito" 
+               :key="item.id" 
+               class="carrito-item">
+            <div class="item-info">
+              <h4>{{ item.nombre }}</h4>
+              <p>{{ item.precioVenta }} Bs x {{ item.cantidad }}</p>
+            </div>
+            <div class="item-actions">
+              <button @click="decrementarCantidad(item)" class="btn-cantidad">-</button>
+              <span>{{ item.cantidad }}</span>
+              <button @click="incrementarCantidad(item)" class="btn-cantidad">+</button>
+              <button @click="eliminarDelCarrito(item)" class="btn-eliminar">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="carrito-total">
-        <p>Total: {{ totalCarrito }} Bs</p>
-        <div class="carrito-actions">
-          <select v-model="metodoPago" class="metodo-pago">
-            <option value="efectivo">Efectivo</option>
-            <option value="transferencia">Transferencia</option>
-            <option value="qr">QR</option>
-          </select>
-          <button 
-            @click="iniciarVenta" 
-            :disabled="carrito.length === 0"
-            class="btn-realizar-venta"
-          >
-            Realizar Venta
+
+        <div class="carrito-total">
+          <div class="total-line">
+            <span>Subtotal:</span>
+            <span>{{ subtotal }} Bs</span>
+          </div>
+          <div class="total-line">
+            <span>Total:</span>
+            <span class="total">{{ total }} Bs</span>
+          </div>
+        </div>
+
+        <div class="carrito-acciones">
+          <button @click="procesarVenta" 
+                  class="btn-procesar" 
+                  :disabled="carrito.length === 0">
+            Procesar Venta
+          </button>
+          <button @click="limpiarCarrito" 
+                  class="btn-limpiar"
+                  :disabled="carrito.length === 0">
+            Limpiar Carrito
           </button>
         </div>
       </div>
     </div>
 
-    <div class="ventas-dia-section">
-      <h2>Ventas del día</h2>
-      <div class="ventas-list">
-        <div v-for="venta in ventasDelDia" :key="venta.id" class="venta-item">
-          <span>{{ venta.fecha.toLocaleTimeString() }} - Total: {{ venta.total }} Bs</span>
-          <div class="venta-actions">
-            <button @click="anularVenta(venta.id)" class="btn-anular">Anular</button>
-            <button @click="reimprimirVenta(venta)" class="btn-reimprimir">Reimprimir</button>
+    <!-- Modal de Pago -->
+    <div class="modal" v-if="mostrarModalPago">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Procesar Pago</h3>
+          <button class="btn-close" @click="cerrarModalPago">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Método de Pago:</label>
+            <select v-model="metodoPago">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="qr">QR</option>
+            </select>
+          </div>
+          
+          <div class="form-group" v-if="metodoPago === 'efectivo'">
+            <label>Monto Recibido:</label>
+            <input 
+              type="number" 
+              v-model.number="montoRecibido"
+              min="0"
+              step="0.01"
+            >
+            <p class="cambio" v-if="cambio > 0">
+              Cambio a devolver: {{ cambio }} Bs
+            </p>
+          </div>
+
+          <div class="total-pagar">
+            <span>Total a Pagar:</span>
+            <span>{{ total }} Bs</span>
+          </div>
+
+          <div class="form-actions">
+            <button @click="confirmarVenta" 
+                    class="btn-primary"
+                    :disabled="!puedeConfirmar">
+              Confirmar Venta
+            </button>
+            <button @click="cerrarModalPago" 
+                    class="btn-secondary">
+              Cancelar
+            </button>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Modal de Cliente -->
-    <Teleport to="body">
-      <div v-if="mostrarModalCliente" class="modal" @click="cerrarModal">
-        <div class="modal-content" @click.stop>
-          <button @click="cerrarModal" class="btn-cerrar">&times;</button>
-          <h3>Datos del Cliente</h3>
-          <form @submit.prevent="confirmarVenta" class="form-cliente">
-            <div class="form-group">
-              <label>Nombre Completo:</label>
-              <input v-model="clienteData.nombre" required>
-            </div>
-            <div class="form-group">
-              <label>Teléfono:</label>
-              <input v-model="clienteData.telefono" required>
-            </div>
-            <div class="form-group">
-              <label>Dirección:</label>
-              <input v-model="clienteData.direccion" required>
-            </div>
-            <div class="form-group">
-              <label>Referencia:</label>
-              <input v-model="clienteData.referencia">
-            </div>
-            <div class="modal-actions">
-              <button type="submit" class="btn-confirmar">Confirmar Venta</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { useProductosStore } from '../stores/productos'
-import { useVentasStore } from '../stores/ventas'
-import { Timestamp } from 'firebase/firestore'
-import jsPDF from 'jspdf'
+import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../firebase'
 
 export default {
   name: 'Ventas',
   setup() {
-    const productosStore = useProductosStore()
-    const ventasStore = useVentasStore()
+    const productos = ref([])
     const busqueda = ref('')
+    const carrito = ref([])
+    const mostrarModalPago = ref(false)
     const metodoPago = ref('efectivo')
-    const mostrarModalCliente = ref(false)
-    const cantidades = ref({})
-    const clienteData = ref({
-      nombre: '',
-      telefono: '',
-      direccion: '',
-      referencia: ''
-    })
+    const montoRecibido = ref(0)
 
-    const productosFiltrados = computed(() => {
-      return productosStore.productos.filter(producto =>
-        producto.nombre.toLowerCase().includes(busqueda.value.toLowerCase())
-      )
-    })
-
-    const carrito = computed(() => ventasStore.carrito)
-    const totalCarrito = computed(() => ventasStore.totalCarrito)
-    const ventasDelDia = computed(() => ventasStore.ventas)
-
-    onMounted(async () => {
-      await productosStore.fetchProductos()
-      await ventasStore.fetchVentas()
-    })
-
-    const agregarAlCarrito = (producto) => {
-      const cantidad = cantidades.value[producto.id]
-      if (cantidad && cantidad > 0 && cantidad <= producto.cantidad) {
-        ventasStore.agregarAlCarrito(producto, cantidad)
-        cantidades.value[producto.id] = 0
+    const cargarProductos = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'productos'))
+        productos.value = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+      } catch (error) {
+        console.error('Error al cargar productos:', error)
+        alert('Error al cargar los productos')
       }
     }
 
-    const removerDelCarrito = (productoId) => {
-      ventasStore.removerDelCarrito(productoId)
+    const productosFiltrados = computed(() => {
+      return productos.value.filter(producto =>
+        producto.nombre.toLowerCase().includes(busqueda.value.toLowerCase()) &&
+        producto.cantidad > 0
+      )
+    })
+
+    const subtotal = computed(() => {
+      return carrito.value.reduce((sum, item) => 
+        sum + (item.precioVenta * item.cantidad), 0
+      )
+    })
+
+    const total = computed(() => subtotal.value)
+
+    const cambio = computed(() => {
+      if (metodoPago.value !== 'efectivo') return 0
+      return Math.max(0, montoRecibido.value - total.value)
+    })
+
+    const puedeConfirmar = computed(() => {
+      if (metodoPago.value === 'efectivo') {
+        return montoRecibido.value >= total.value
+      }
+      return true
+    })
+
+    const agregarAlCarrito = (producto) => {
+      const itemExistente = carrito.value.find(item => item.id === producto.id)
+      if (itemExistente) {
+        if (itemExistente.cantidad < producto.cantidad) {
+          itemExistente.cantidad++
+        }
+      } else {
+        carrito.value.push({
+          id: producto.id,
+          nombre: producto.nombre,
+          precioVenta: producto.precioVenta,
+          cantidad: 1,
+          stockDisponible: producto.cantidad
+        })
+      }
     }
 
-    const iniciarVenta = () => {
-      mostrarModalCliente.value = true
+    const incrementarCantidad = (item) => {
+      if (item.cantidad < item.stockDisponible) {
+        item.cantidad++
+      }
+    }
+
+    const decrementarCantidad = (item) => {
+      if (item.cantidad > 1) {
+        item.cantidad--
+      }
+    }
+
+    const eliminarDelCarrito = (item) => {
+      carrito.value = carrito.value.filter(i => i.id !== item.id)
+    }
+
+    const limpiarCarrito = () => {
+      carrito.value = []
+      cerrarModalPago()
+    }
+
+    const procesarVenta = () => {
+      mostrarModalPago.value = true
+      montoRecibido.value = total.value
+    }
+
+    const cerrarModalPago = () => {
+      mostrarModalPago.value = false
+      metodoPago.value = 'efectivo'
+      montoRecibido.value = 0
     }
 
     const confirmarVenta = async () => {
       try {
-        console.log('Iniciando venta...')
-        const ventaRealizada = await ventasStore.realizarVenta({
+        // Registrar la venta
+        const venta = {
+          fecha: serverTimestamp(),
+          items: carrito.value.map(item => ({
+            productoId: item.id,
+            cantidad: item.cantidad,
+            precioUnitario: item.precioVenta,
+            subtotal: item.cantidad * item.precioVenta
+          })),
           metodoPago: metodoPago.value,
-          cliente: clienteData.value,
-          fecha: new Date()
-        })
-        console.log('Venta realizada:', ventaRealizada)
-        alert('Venta realizada con éxito')
-        console.log('Generando PDF...')
-        await generarPDF(ventaRealizada)
-        console.log('PDF generado')
-        // Recargar la página después de un breve retraso
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000) // Espera 1 segundo antes de recargar
-      } catch (error) {
-        console.error('Error al realizar la venta:', error)
-        alert('Error al realizar la venta: ' + error.message)
-      }
-    }
-
-    const cerrarModal = () => {
-      mostrarModalCliente.value = false
-      limpiarDespuesDeVenta()
-    }
-
-    const limpiarDespuesDeVenta = () => {
-      clienteData.value = {
-        nombre: '',
-        telefono: '',
-        direccion: '',
-        referencia: ''
-      }
-      ventasStore.limpiarCarrito()
-      cantidades.value = {}
-    }
-
-    const generarPDF = async (venta) => {
-      console.log('Iniciando generación de PDF...', venta)
-      const doc = new jsPDF()
-      
-      // Convertir la fecha de Firestore a Date si es necesario
-      const fecha = venta.fecha instanceof Timestamp ? 
-        venta.fecha.toDate() : 
-        new Date(venta.fecha)
-      
-      // Información de la empresa
-      doc.setFontSize(18)
-      doc.text('DUOCONS SRL', 10, 20)
-      doc.setFontSize(10)
-      doc.text('Teléfono: 63599920 - 63605479', 10, 30)
-      
-      // Información del documento
-      doc.text(`PROFORMA NRO: ${venta.id}`, 120, 20)
-      doc.text(`Fecha de Emisión: ${fecha.toLocaleDateString()}`, 120, 30)
-      
-      // Información del cliente
-      doc.text('CLIENTE:', 10, 45)
-      doc.text(`${venta.cliente.nombre}`, 50, 45)
-      doc.text('DIRECCIÓN:', 10, 55)
-      doc.text(`${venta.cliente.direccion}`, 50, 55)
-      doc.text('REFERENCIA:', 10, 65)
-      doc.text(`${venta.cliente.referencia || 'N/A'}`, 50, 65)
-      
-      // Tabla de productos
-      let y = 80
-      doc.text('Código', 10, y)
-      doc.text('Cantidad', 40, y)
-      doc.text('Costo', 70, y)
-      doc.text('Unidad', 90, y)
-      doc.text('Subtotal', 110, y)
-      doc.text('Descripción', 140, y)
-      
-      y += 10
-      venta.productos.forEach((item) => {
-        doc.text(item.id.toString(), 10, y)
-        doc.text(item.cantidad.toString(), 40, y)
-        doc.text(item.precioVenta.toString(), 70, y)
-        doc.text('MTR2.', 90, y)
-        doc.text((item.cantidad * item.precioVenta).toString(), 110, y)
-        doc.text(item.nombre, 140, y)
-        y += 10
-      })
-      
-      // Totales
-      y += 10
-      doc.text('TOTAL SIN DESCUENTO:', 100, y)
-      doc.text(`${venta.total} Bs.`, 150, y)
-      
-      // Pie de página
-      doc.text('Visita nuestra Plataforma: webcons.com', 10, 280)
-      doc.text('Avenida/Roque Aguilera Frente a los cerenguos/ Zona Alto San Pedro', 10, 290)
-      
-      console.log('PDF generado, abriendo en nueva pestaña...')
-      // Abrir el PDF en una nueva pestaña
-      window.open(URL.createObjectURL(doc.output('blob')), '_blank')
-    }
-
-    const anularVenta = async (ventaId) => {
-      if (confirm('¿Estás seguro de que deseas anular esta venta?')) {
-        try {
-          await ventasStore.anularVenta(ventaId)
-          alert('Venta anulada con éxito')
-        } catch (error) {
-          console.error('Error al anular la venta:', error)
-          alert('Error al anular la venta')
+          total: total.value
         }
+
+        await addDoc(collection(db, 'ventas'), venta)
+
+        // Actualizar stock
+        for (const item of carrito.value) {
+          const productoRef = doc(db, 'productos', item.id)
+          const producto = productos.value.find(p => p.id === item.id)
+          await updateDoc(productoRef, {
+            cantidad: producto.cantidad - item.cantidad
+          })
+        }
+
+        // Registrar en caja chica
+        await addDoc(collection(db, 'cajaChica'), {
+          fecha: serverTimestamp(),
+          tipo: 'ingreso',
+          descripcion: `Venta #${Date.now()}`,
+          monto: total.value,
+          metodoPago: metodoPago.value
+        })
+
+        // Recargar productos y limpiar carrito
+        await cargarProductos()
+        limpiarCarrito()
+        alert('Venta realizada con éxito')
+      } catch (error) {
+        console.error('Error al procesar la venta:', error)
+        alert('Error al procesar la venta')
       }
     }
 
-    const reimprimirVenta = (venta) => {
-      generarPDF(venta)
-    }
+    onMounted(cargarProductos)
 
     return {
+      productos,
       busqueda,
-      productosFiltrados,
       carrito,
-      totalCarrito,
-      ventasDelDia,
+      mostrarModalPago,
       metodoPago,
-      mostrarModalCliente,
-      cantidades,
-      clienteData,
+      montoRecibido,
+      productosFiltrados,
+      subtotal,
+      total,
+      cambio,
+      puedeConfirmar,
       agregarAlCarrito,
-      removerDelCarrito,
-      iniciarVenta,
-      confirmarVenta,
-      cerrarModal,
-      anularVenta,
-      reimprimirVenta
+      incrementarCantidad,
+      decrementarCantidad,
+      eliminarDelCarrito,
+      limpiarCarrito,
+      procesarVenta,
+      cerrarModalPago,
+      confirmarVenta
     }
   }
 }
 </script>
 
 <style scoped>
-.ventas-container {
+.ventas {
   padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #2c3e50;
+}
+
+.ventas-container {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 400px;
   gap: 20px;
 }
 
-.productos-section, .carrito-section, .ventas-dia-section {
+.productos-panel, .carrito-panel {
   background: white;
-  padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 20px;
 }
 
-.search-input {
+.search-box {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.search-box i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+}
+
+.search-box input {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 15px;
+  padding: 8px 8px 8px 35px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  font-size: 0.9rem;
 }
 
-.producto-item {
-  padding: 10px;
-  border-bottom: 1px solid #eee;
+.productos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
 }
 
-.cantidad-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 5px;
-}
-
-.cantidad-input {
-  width: 60px;
-  padding: 4px;
-}
-
-.btn-agregar {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
+.producto-card {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 15px;
   cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.btn-agregar:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+.producto-card:hover {
+  transform: translateY(-2px);
+}
+
+.producto-info h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.precio {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 5px 0;
+}
+
+.stock {
+  font-size: 0.9rem;
+  color: #28a745;
+  margin: 0;
+}
+
+.stock.stock-bajo {
+  color: #dc3545;
+}
+
+.carrito-items {
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+  margin-bottom: 20px;
 }
 
 .carrito-item {
@@ -356,75 +408,112 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 10px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #ddd;
 }
 
-.btn-remover {
-  background-color: #ff4444;
+.item-info h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-cantidad {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-eliminar {
+  background: #dc3545;
   color: white;
   border: none;
-  padding: 5px 10px;
+  padding: 6px;
   border-radius: 4px;
   cursor: pointer;
 }
 
 .carrito-total {
-  margin-top: 20px;
-  padding-top: 10px;
-  border-top: 2px solid #eee;
+  border-top: 2px solid #ddd;
+  padding-top: 15px;
+  margin-bottom: 20px;
 }
 
-.carrito-actions {
+.total-line {
   display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+}
+
+.total {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.carrito-acciones {
+  display: grid;
   gap: 10px;
-  margin-top: 10px;
 }
 
-.metodo-pago {
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.btn-realizar-venta {
-  background-color: #4CAF50;
+.btn-procesar {
+  background: #4CAF50;
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 12px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-limpiar {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
 }
 
 .modal {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.5);
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   z-index: 1000;
 }
 
 .modal-content {
   background: white;
-  padding: 20px;
   border-radius: 8px;
-  width: 400px;
-  position: relative;
+  width: 90%;
+  max-width: 500px;
 }
 
-.btn-cerrar {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #333;
+.modal-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-body {
+  padding: 20px;
 }
 
 .form-group {
@@ -436,6 +525,7 @@ export default {
   margin-bottom: 5px;
 }
 
+.form-group select,
 .form-group input {
   width: 100%;
   padding: 8px;
@@ -443,25 +533,34 @@ export default {
   border-radius: 4px;
 }
 
-.modal-actions {
+.cambio {
+  color: #28a745;
+  font-weight: bold;
+  margin-top: 5px;
+}
+
+.total-pagar {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 20px 0;
   display: flex;
+  justify-content: space-between;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
   justify-content: flex-end;
-  margin-top: 20px;
 }
 
-.btn-confirmar {
-  background-color: #4CAF50;
-  color: white;
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
-button {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-  opacity: 0.9;
+@media (max-width: 1024px) {
+  .ventas-container {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

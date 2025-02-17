@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 
 export const useCajaChicaStore = defineStore('cajaChica', {
@@ -8,7 +8,6 @@ export const useCajaChicaStore = defineStore('cajaChica', {
     loading: false,
     error: null
   }),
-
   actions: {
     async cargarTransacciones() {
       this.loading = true
@@ -18,7 +17,7 @@ export const useCajaChicaStore = defineStore('cajaChica', {
         this.transacciones = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          fecha: doc.data().fecha.toDate?.() || new Date(doc.data().fecha)
+          fecha: doc.data().fecha.toDate()
         }))
       } catch (error) {
         console.error('Error al cargar transacciones:', error)
@@ -27,31 +26,29 @@ export const useCajaChicaStore = defineStore('cajaChica', {
         this.loading = false
       }
     },
-
     async agregarTransaccion(transaccion) {
       try {
-        const docRef = await addDoc(collection(db, 'cajaChica'), {
+        const transaccionConFecha = {
           ...transaccion,
-          fecha: new Date(transaccion.fecha)
-        })
+          fecha: Timestamp.fromDate(new Date(transaccion.fecha))
+        }
+        const docRef = await addDoc(collection(db, 'cajaChica'), transaccionConFecha)
         this.transacciones.unshift({
           id: docRef.id,
-          ...transaccion,
+          ...transaccionConFecha,
           fecha: new Date(transaccion.fecha)
         })
-        return docRef.id
       } catch (error) {
         console.error('Error al agregar transacción:', error)
         throw error
       }
     },
-
     async actualizarTransaccion(transaccion) {
       try {
         const { id, ...transaccionSinId } = transaccion
         await updateDoc(doc(db, 'cajaChica', id), {
           ...transaccionSinId,
-          fecha: new Date(transaccion.fecha)
+          fecha: Timestamp.fromDate(new Date(transaccion.fecha))
         })
         const index = this.transacciones.findIndex(t => t.id === id)
         if (index !== -1) {
@@ -65,7 +62,6 @@ export const useCajaChicaStore = defineStore('cajaChica', {
         throw error
       }
     },
-
     async eliminarTransaccion(id) {
       try {
         await deleteDoc(doc(db, 'cajaChica', id))

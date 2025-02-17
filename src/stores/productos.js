@@ -1,89 +1,56 @@
 import { defineStore } from 'pinia'
-import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc } from 'firebase/firestore'
 import { db } from '../firebase'
 
 export const useProductosStore = defineStore('productos', {
   state: () => ({
-    productos: []
+    productos: [],
+    loading: false,
+    error: null
   }),
   actions: {
     async fetchProductos() {
-      const productosRef = collection(db, 'productos')
+      this.loading = true
       try {
-        const querySnapshot = await getDocs(productosRef)
+        const querySnapshot = await getDocs(collection(db, 'productos'))
         this.productos = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }))
       } catch (error) {
         console.error('Error al obtener productos:', error)
-        throw error
+        this.error = error.message
+      } finally {
+        this.loading = false
       }
     },
-    
-    async agregarProducto(producto) {
-      const productosRef = collection(db, 'productos')
+    async addProducto(producto) {
       try {
-        const docRef = await addDoc(productosRef, producto)
-        this.productos.push({ id: docRef.id, ...producto })
+        const docRef = await addDoc(collection(db, 'productos'), producto)
+        this.productos.push({ ...producto, id: docRef.id })
       } catch (error) {
-        console.error('Error al agregar producto:', error)
+        console.error('Error al añadir producto:', error)
         throw error
       }
     },
-    
-    async actualizarProducto(id, datos) {
-      const productoRef = doc(db, 'productos', id)
+    async updateProducto(id, producto) {
       try {
-        await updateDoc(productoRef, datos)
+        await updateDoc(doc(db, 'productos', id), producto)
         const index = this.productos.findIndex(p => p.id === id)
         if (index !== -1) {
-          this.productos[index] = { ...this.productos[index], ...datos }
+          this.productos[index] = { ...producto, id }
         }
       } catch (error) {
         console.error('Error al actualizar producto:', error)
         throw error
       }
     },
-    
-    async eliminarProducto(id) {
-      const productoRef = doc(db, 'productos', id)
+    async deleteProducto(id) {
       try {
-        await deleteDoc(productoRef)
-        const index = this.productos.findIndex(p => p.id === id)
-        if (index !== -1) {
-          this.productos.splice(index, 1)
-        }
+        await deleteDoc(doc(db, 'productos', id))
+        this.productos = this.productos.filter(p => p.id !== id)
       } catch (error) {
         console.error('Error al eliminar producto:', error)
-        throw error
-      }
-    },
-    
-    async actualizarStock(productoId, cantidad) {
-      try {
-        const producto = this.productos.find(p => p.id === productoId)
-        if (!producto) {
-          throw new Error('Producto no encontrado')
-        }
-        
-        const nuevoStock = producto.cantidad + cantidad
-        if (nuevoStock < 0) {
-          throw new Error('Stock insuficiente')
-        }
-        
-        const productoRef = doc(db, 'productos', productoId)
-        await updateDoc(productoRef, {
-          cantidad: nuevoStock
-        })
-        
-        // Actualizar el estado local
-        const index = this.productos.findIndex(p => p.id === productoId)
-        if (index !== -1) {
-          this.productos[index].cantidad = nuevoStock
-        }
-      } catch (error) {
-        console.error('Error al actualizar stock:', error)
         throw error
       }
     }
