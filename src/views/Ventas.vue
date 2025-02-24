@@ -1,7 +1,7 @@
 <template>
   <div class="ventas">
-    <h2 class="page-title">Punto de Venta</h2>
-
+    <h1 class="page-title">Ventas</h1>
+    
     <div class="ventas-container">
       <!-- Panel de Productos -->
       <div class="productos-panel">
@@ -10,20 +10,21 @@
           <input 
             type="text" 
             v-model="busqueda" 
-            placeholder="Buscar producto..."
-            @input="filtrarProductos"
+            placeholder="Buscar productos..."
           >
         </div>
-
+        
         <div class="productos-grid">
-          <div v-for="producto in productosFiltrados" 
-               :key="producto.id" 
-               class="producto-card"
-               @click="agregarAlCarrito(producto)">
+          <div 
+            v-for="producto in productosFiltrados" 
+            :key="producto.id"
+            class="producto-card"
+            @click="agregarAlCarrito(producto)"
+          >
             <div class="producto-info">
               <h3>{{ producto.nombre }}</h3>
               <p class="precio">{{ producto.precioVenta }} Bs</p>
-              <p class="stock" :class="{ 'stock-bajo': producto.cantidad <= producto.stockMinimo }">
+              <p :class="['stock', producto.cantidad < 10 ? 'stock-bajo' : '']">
                 Stock: {{ producto.cantidad }}
               </p>
             </div>
@@ -33,23 +34,37 @@
 
       <!-- Panel del Carrito -->
       <div class="carrito-panel">
-        <h3>Carrito de Compras</h3>
-        
         <div class="carrito-items">
-          <div v-for="item in carrito" 
-               :key="item.id" 
-               class="carrito-item">
+          <div 
+            v-for="item in carrito" 
+            :key="item.id"
+            class="carrito-item"
+          >
             <div class="item-info">
               <h4>{{ item.nombre }}</h4>
-              <p>{{ item.precioVenta }} Bs x {{ item.cantidad }}</p>
+              <p>{{ item.precioVenta }} Bs</p>
             </div>
             <div class="item-actions">
-              <button @click="decrementarCantidad(item)" class="btn-cantidad">-</button>
-              <span>{{ item.cantidad }}</span>
-              <button @click="incrementarCantidad(item)" class="btn-cantidad">+</button>
-              <button @click="eliminarDelCarrito(item)" class="btn-eliminar">
-                <i class="fas fa-trash"></i>
-              </button>
+              <button 
+                class="btn-cantidad"
+                @click="decrementarCantidad(item)"
+              >-</button>
+              <input
+                type="number"
+                v-model.number="item.cantidad"
+                @change="actualizarCantidad(item)"
+                class="cantidad-input"
+                min="1"
+                :max="item.stockDisponible"
+              >
+              <button 
+                class="btn-cantidad"
+                @click="incrementarCantidad(item)"
+              >+</button>
+              <button 
+                class="btn-eliminar"
+                @click="eliminarDelCarrito(item)"
+              >×</button>
             </div>
           </div>
         </div>
@@ -59,45 +74,54 @@
             <span>Subtotal:</span>
             <span>{{ subtotal }} Bs</span>
           </div>
-          <div class="total-line">
+          <div class="total-line total">
             <span>Total:</span>
-            <span class="total">{{ total }} Bs</span>
+            <span>{{ total }} Bs</span>
           </div>
         </div>
 
         <div class="carrito-acciones">
-          <button @click="procesarVenta" 
-                  class="btn-procesar" 
-                  :disabled="carrito.length === 0">
-            Procesar Venta
-          </button>
-          <button @click="limpiarCarrito" 
-                  class="btn-limpiar"
-                  :disabled="carrito.length === 0">
-            Limpiar Carrito
-          </button>
-          <button @click="mostrarHistorialVentas" class="btn-historial">
-            Historial de Ventas
-          </button>
+          <button 
+            class="btn-procesar"
+            @click="procesarVenta"
+            :disabled="!carrito.length"
+          >Procesar Venta</button>
+          <button 
+            class="btn-limpiar"
+            @click="limpiarCarrito"
+            :disabled="!carrito.length"
+          >Limpiar Carrito</button>
+          <button 
+            class="btn-historial"
+            @click="mostrarHistorialVentas"
+          >Historial de Ventas</button>
         </div>
       </div>
     </div>
 
     <!-- Modal de Pago -->
-    <div class="modal" v-if="mostrarModalPago">
+    <div v-if="mostrarModalPago" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Procesar Pago</h3>
-          <button class="btn-close" @click="cerrarModalPago">×</button>
+          <h2>Confirmar Venta</h2>
+          <button @click="cerrarModalPago">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
             <label>Nombre del Cliente:</label>
-            <input type="text" v-model="nombreCliente">
+            <input 
+              type="text" 
+              v-model="nombreCliente"
+              placeholder="Ingrese el nombre del cliente"
+            >
           </div>
           <div class="form-group">
-            <label>CI/NIT del Cliente:</label>
-            <input type="text" v-model="ciNitCliente">
+            <label>CI/NIT:</label>
+            <input 
+              type="text" 
+              v-model="ciNitCliente"
+              placeholder="Ingrese CI o NIT"
+            >
           </div>
           <div class="form-group">
             <label>Método de Pago:</label>
@@ -107,83 +131,87 @@
               <option value="qr">QR</option>
             </select>
           </div>
-          
-          <div class="form-group" v-if="metodoPago === 'efectivo'">
+          <div v-if="metodoPago === 'efectivo'" class="form-group">
             <label>Monto Recibido:</label>
             <input 
               type="number" 
               v-model.number="montoRecibido"
               min="0"
-              step="0.01"
             >
-            <p class="cambio" v-if="cambio > 0">
-              Cambio a devolver: {{ cambio }} Bs
-            </p>
+            <div v-if="cambio > 0" class="cambio">
+              Cambio: {{ cambio }} Bs
+            </div>
           </div>
-
           <div class="total-pagar">
             <span>Total a Pagar:</span>
             <span>{{ total }} Bs</span>
           </div>
-
           <div class="form-actions">
-            <button @click="confirmarVenta" 
-                    class="btn-primary"
-                    :disabled="!puedeConfirmar">
-              Confirmar Venta
-            </button>
-            <button @click="cerrarModalPago" 
-                    class="btn-secondary">
-              Cancelar
-            </button>
+            <button 
+              class="btn-procesar"
+              @click="confirmarVenta"
+              :disabled="!puedeConfirmar"
+            >Confirmar</button>
+            <button 
+              class="btn-limpiar"
+              @click="cerrarModalPago"
+            >Cancelar</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal de Historial de Ventas -->
-    <div class="modal" v-if="mostrarModalHistorial">
+    <!-- Modal de Historial -->
+    <div v-if="mostrarModalHistorial" class="modal">
       <div class="modal-content modal-large">
         <div class="modal-header">
-          <h3>Historial de Ventas</h3>
-          <button class="btn-close" @click="cerrarModalHistorial">×</button>
+          <h2>Historial de Ventas</h2>
+          <button @click="cerrarModalHistorial">×</button>
         </div>
         <div class="modal-body">
           <table class="ventas-table">
             <thead>
               <tr>
-                <th>ID Venta</th>
-                <th>Fecha</th>
+                <th>ID</th>
                 <th>Cliente</th>
+                <th>Fecha</th>
                 <th>Total</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="venta in ventas" :key="venta.id" :class="{ 'venta-anulada': venta.anulada }">
+              <tr v-for="venta in ventas" 
+                  :key="venta.id"
+                  :class="{ 'venta-anulada': venta.anulada }">
                 <td>{{ venta.id }}</td>
+                <td>{{ venta.nombreCliente }}</td>
                 <td>{{ formatDate(venta.fecha) }}</td>
-                <td>{{ venta.nombreCliente || 'N/A' }}</td>
-                <td>{{ venta.total.toFixed(2) }} Bs</td>
+                <td>{{ venta.total }} Bs</td>
                 <td>{{ venta.anulada ? 'Anulada' : 'Activa' }}</td>
                 <td>
-                  <button @click="reimprimirPDF(venta)" class="btn-action">
-                    <i class="fas fa-print"></i> Reimprimir
+                  <button 
+                    class="btn-action"
+                    @click="reimprimirPDF(venta)"
+                    :disabled="venta.anulada">
+                    Reimprimir
                   </button>
                   <button 
-                    @click="anularVenta(venta)" 
                     class="btn-action btn-anular"
+                    @click="anularVenta(venta)"
                     :disabled="venta.anulada">
-                    <i class="fas fa-ban"></i> {{ venta.anulada ? 'Anulada' : 'Anular' }}
+                    Anular
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
           <div class="reporte-actions">
-            <button @click="generarReporteVentas" class="btn-primary">
-              <i class="fas fa-file-pdf"></i> Generar Reporte de Ventas
+            <button 
+              class="btn-action"
+              style="background-color: #28a745;"
+              @click="generarReporteVentas">
+              Generar Reporte
             </button>
           </div>
         </div>
@@ -291,6 +319,15 @@ export default {
       }
     }
 
+    const actualizarCantidad = (item) => {
+      if (isNaN(item.cantidad) || item.cantidad < 1) {
+        item.cantidad = 1
+      } else if (item.cantidad > item.stockDisponible) {
+        item.cantidad = item.stockDisponible
+      }
+      item.cantidad = Math.floor(item.cantidad)
+    }
+
     const eliminarDelCarrito = (item) => {
       carrito.value = carrito.value.filter(i => i.id !== item.id)
     }
@@ -321,7 +358,10 @@ export default {
 
       const docDefinition = {
         content: [
-          { text: 'Factura de Venta', style: 'mainHeader' },
+          { text: 'PROFORMA', style: 'mainHeader' },
+          { text: 'Venta y servicios en construcción en seco', style: 'subHeader' },
+          { text: 'Cel: 63605479', style: 'contactInfo' },
+          { text: '\n' },
           { text: `Nº de Venta: ${ventaId}`, style: 'subheader' },
           { text: `Fecha: ${new Date().toLocaleString()}`, style: 'subheader' },
           { text: `Cliente: ${venta.nombreCliente}`, style: 'subheader' },
@@ -372,9 +412,21 @@ export default {
         ],
         styles: {
           mainHeader: {
-            fontSize: 22,
+            fontSize: 24,
             bold: true,
             color: '#006400',
+            alignment: 'center',
+            margin: [0, 0, 0, 5]
+          },
+          subHeader: {
+            fontSize: 14,
+            color: '#2E74B5',
+            alignment: 'center',
+            margin: [0, 0, 0, 5]
+          },
+          contactInfo: {
+            fontSize: 12,
+            color: '#2E74B5',
             alignment: 'center',
             margin: [0, 0, 0, 10]
           },
@@ -545,7 +597,6 @@ export default {
         const ventasValidas = ventas.value.filter(v => !v.anulada);
         const totalVentas = ventasValidas.reduce((sum, v) => sum + v.total, 0);
 
-        // Preparar los datos de las ventas
         const ventasData = ventasValidas.map(v => ([
           v.id,
           v.nombreCliente || 'N/A',
@@ -619,7 +670,6 @@ export default {
           }
         };
 
-        // Generar y descargar el PDF
         pdfMake.createPdf(docDefinition).download(`reporte_ventas_${new Date().toISOString().split('T')[0]}.pdf`);
       } catch (error) {
         console.error('Error al generar el reporte:', error);
@@ -648,6 +698,7 @@ export default {
       agregarAlCarrito,
       incrementarCantidad,
       decrementarCantidad,
+      actualizarCantidad,
       eliminarDelCarrito,
       limpiarCarrito,
       procesarVenta,
@@ -785,6 +836,14 @@ export default {
   background: white;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.cantidad-input {
+  width: 50px;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px;
 }
 
 .btn-eliminar {
