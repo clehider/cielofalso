@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas generales
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Reglas específicas para cada colección
+    match /inventario/{document=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /ventas/{document=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /cajaChica/{document=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Nuevas reglas para la colección de clientes
+    match /clientes/{cliente} {
+      allow read: if true;
+      allow write: if true;
+      
+      // Reglas para las subcollecciones de clientes
+      match /servicios/{servicio} {
+        allow read: if true;
+        allow write: if true;
+      }
+      
+      match /interacciones/{interaccion} {
+        allow read: if true;
+        allow write: if true;
+      }
+    }
+  }
+}

@@ -1,25 +1,22 @@
 {
   "name": "cielofalso",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ./node_modules/vite/bin/vite.js",
-    "build": "node ./node_modules/vite/bin/vite.js build",
-    "preview": "node ./node_modules/vite/bin/vite.js preview"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.7.2",
-    "@vueuse/core": "^10.0.0",
-    "firebase": "^9.0.0",
-    "jspdf": "^2.5.1",
-    "pdfmake": "^0.2.18",
-    "pinia": "^2.3.1",
-    "vue": "^3.3.4",
-    "vue-router": "^4.0.0"
+    "firebase": "^10.8.0",
+    "pdfmake": "^0.2.9",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.2.3",
-    "vite": "^4.4.5"
+    "@vitejs/plugin-vue": "^5.0.3",
+    "vite": "^5.0.11"
   }
 }

@@ -3,55 +3,39 @@ import Dashboard from '../views/Dashboard.vue'
 import Inventario from '../views/Inventario.vue'
 import Ventas from '../views/Ventas.vue'
 import CajaChica from '../views/CajaChica.vue'
-import CRM from '../views/CRM.vue'
+import Clientes from '../views/Clientes.vue'
 
 const routes = [
-{
-  path: '/',
-  name: 'Dashboard',
-  component: Dashboard,
-  meta: { keepAlive: true }
-},
-{
-  path: '/inventario',
-  name: 'Inventario',
-  component: Inventario,
-  meta: { keepAlive: true }
-},
-{
-  path: '/ventas',
-  name: 'Ventas',
-  component: Ventas,
-  meta: { keepAlive: true }
-},
-{
-  path: '/caja-chica',
-  name: 'CajaChica',
-  component: CajaChica,
-  meta: { keepAlive: true }
-},
-{
-  path: '/crm',
-  name: 'CRM',
-  component: CRM,
-  meta: { keepAlive: true }
-}
+  {
+    path: '/',
+    name: 'Dashboard',
+    component: Dashboard
+  },
+  {
+    path: '/inventario',
+    name: 'Inventario',
+    component: Inventario
+  },
+  {
+    path: '/ventas',
+    name: 'Ventas',
+    component: Ventas
+  },
+  {
+    path: '/caja-chica',
+    name: 'CajaChica',
+    component: CajaChica
+  },
+  {
+    path: '/clientes',
+    name: 'Clientes',
+    component: Clientes
+  }
 ]
 
 const router = createRouter({
-history: createWebHistory(),
-routes,
-scrollBehavior(to, from, savedPosition) {
-  if (savedPosition) {
-    return savedPosition
-  } else {
-    return { top: 0 }
-  }
-}
-})
-
-router.onError((error) => {
-console.error('Error de navegación:', error)
+  history: createWebHistory(),
+  routes
 })
 
 export default router
